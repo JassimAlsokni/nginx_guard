@@ -1,0 +1,104 @@
+name: secure-proxy-lab
+
+services:
+  frontend-app:
+    build:
+      context: .
+      dockerfile: Dockerfile.frontend
+    expose:
+      - "80"
+    networks:
+      - lab-net
+    logging:
+      driver: local
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  lab-api:
+    build:
+      context: .
+      dockerfile: Dockerfile.api
+    environment:
+      LAB_API_HOST: 0.0.0.0
+      LAB_API_PORT: 4000
+      ATTACK_PROXY_HOST: nginx-attack
+      ATTACK_PROXY_PORT: 80
+      SAFE_PROXY_HOST: nginx-safe
+      SAFE_PROXY_PORT: 443
+    expose:
+      - "4000"
+    ports:
+      - "127.0.0.1:4000:4000"
+    volumes:
+      - ./logs:/app/logs
+    networks:
+      - lab-net
+    logging:
+      driver: local
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  nginx-attack:
+    build:
+      context: .
+      dockerfile: Dockerfile.attack
+    ports:
+      - "8081:80"
+    volumes:
+      - ./logs/attack:/var/log/nginx
+    depends_on:
+      - frontend-app
+      - lab-api
+    networks:
+      - lab-net
+    logging:
+      driver: local
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  nginx-safe:
+    build:
+      context: .
+      dockerfile: Dockerfile.safe
+    ports:
+      - "8082:80"
+      - "8443:443"
+    volumes:
+      - ./logs/safe:/var/log/nginx
+    depends_on:
+      - frontend-app
+      - lab-api
+    networks:
+      - lab-net
+    logging:
+      driver: local
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  alerts-db:
+    image: postgres:15
+    profiles:
+      - alerts-db
+    environment:
+      POSTGRES_DB: alerts
+      POSTGRES_USER: lab
+      POSTGRES_PASSWORD: lab_password
+    volumes:
+      - alerts-db-data:/var/lib/postgresql/data
+    networks:
+      - lab-net
+    logging:
+      driver: local
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+networks:
+  lab-net:
+
+volumes:
+  alerts-db-data:

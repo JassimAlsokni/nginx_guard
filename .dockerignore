@@ -1,0 +1,10 @@
+node_modules
+dist-ssr
+.git
+.vite
+logs
+*.log
+Dockerfile*
+docker-compose*.yml
+README.md
+SECURE_PROXY_LAB.md
