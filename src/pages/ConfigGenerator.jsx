@@ -21,7 +21,6 @@ const defaultOptions = {
   enableRateLimit: true,
   enableDotfileBlock: true,
   enableGzip: true,
-  tlsVersion: "1.2",
 };
 
 function generateConfig(opts) {
@@ -50,9 +49,8 @@ function generateConfig(opts) {
     lines.push("    # TLS Configuration");
     lines.push("    ssl_certificate /etc/nginx/ssl/fullchain.pem;");
     lines.push("    ssl_certificate_key /etc/nginx/ssl/privkey.pem;");
-    lines.push(`    ssl_protocols TLSv${opts.tlsVersion} TLSv1.3;`);
-    lines.push("    ssl_ciphers 'ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384';");
-    lines.push("    ssl_prefer_server_ciphers on;");
+    lines.push("    ssl_protocols TLSv1.3;");
+    lines.push("    # TLS 1.3 selects modern ciphers automatically.");
     lines.push("    ssl_session_cache shared:SSL:10m;");
     lines.push("    ssl_session_timeout 1d;");
     lines.push("    ssl_session_tickets off;");

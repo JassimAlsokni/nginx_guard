@@ -26,11 +26,11 @@ export default function AttackCoverageTable() {
           <p className="text-muted-foreground">The same frontend app is tested through the attack proxy and the safe proxy.</p>
         </motion.div>
 
-        <div className="overflow-x-auto rounded-xl border border-border bg-card">
+        <div className="rounded-lg border border-border bg-card overflow-hidden">
           <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-border bg-secondary/30">
-                <th className="text-left px-5 py-3.5 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Attack</th>
+            <thead className="bg-secondary/30 border-b border-border">
+              <tr>
+                <th className="text-left px-5 py-3.5 text-xs font-semibold uppercase tracking-wider text-foreground">Test Area</th>
                 <th className="text-left px-5 py-3.5 text-xs font-semibold uppercase tracking-wider text-destructive">Attack Proxy</th>
                 <th className="text-left px-5 py-3.5 text-xs font-semibold uppercase tracking-wider text-primary">Safe Proxy</th>
                 <th className="text-left px-5 py-3.5 text-xs font-semibold uppercase tracking-wider text-muted-foreground hidden md:table-cell">Key Fix</th>

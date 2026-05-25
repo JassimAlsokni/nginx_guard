@@ -9,112 +9,148 @@ const attacks = [
     id: "sqli",
     name: "SQL Injection",
     severity: "critical",
-    description: "Injects SQL code through query parameters to manipulate database queries.",
-    payload: "?id=1' OR '1'='1' --",
-    vulnerable: { status: 200, response: "SQL injection-looking request passed through and was logged for investigation.", headers: { "Server": "nginx/1.25.3" } },
-    hardened: { status: 200, response: "Request reached the same frontend app, with safe proxy headers attached and logged.", headers: { "Server": "nginx", "Content-Security-Policy": "default-src 'self'", "X-Frame-Options": "DENY" } },
-    fix: `# Block suspicious query strings\nif ($query_string ~* "(union|select|insert|drop|delete|update|--|;|'|\\\")" ) {\n  return 400;\n}`,
+    description: "Injects SQL syntax into query parameters to manipulate backend database queries.",
+    payload: "/search?q=UNION%20SELECT%20username,password%20FROM%20users",
+    fix: `location /search {
+  if ($query_string ~* "(union|select|insert|drop|delete|update|--|;|'|\\\")") {
+    return 403;
+  }
+}`,
   },
   {
     id: "xss",
     name: "Cross-Site Scripting (XSS)",
     severity: "high",
-    description: "Injects malicious JavaScript that executes in the victim's browser.",
-    payload: '?search=<script>alert("XSS")</script>',
-    vulnerable: { status: 200, response: "Script tag reflected in HTML response. Browser executes injected code.", headers: { "Server": "nginx/1.25.3" } },
-    hardened: { status: 200, response: "Content-Security-Policy blocks inline script execution.", headers: { "Content-Security-Policy": "default-src 'self'; script-src 'self'", "X-Content-Type-Options": "nosniff" } },
-    fix: `add_header Content-Security-Policy "default-src 'self'; script-src 'self';" always;\nadd_header X-Content-Type-Options "nosniff" always;`,
+    description: "Sends a script payload through an input that might be reflected back to the browser.",
+    payload: "/search?q=%3Cscript%3Ealert(1)%3C/script%3E",
+    fix: `add_header Content-Security-Policy "default-src 'self'; script-src 'self';" always;
+add_header X-Content-Type-Options "nosniff" always;`,
   },
   {
     id: "path-traversal",
     name: "Path Traversal / LFI",
     severity: "critical",
-    description: "Uses ../ sequences to escape the web root and access system files.",
+    description: "Attempts to escape the web root and access filesystem resources.",
     payload: "/../../etc/passwd",
-    vulnerable: { status: 200, response: "root:x:0:0:root:/root:/bin/bash\ndaemon:x:1:1:daemon:/usr/sbin:...", headers: { "Server": "nginx/1.25.3" } },
-    hardened: { status: 403, response: "Forbidden — path normalised and request denied.", headers: { "Server": "nginx" } },
-    fix: `merge_slashes on;\nlocation ~ /\\.\\./ {\n  deny all;\n}`,
+    fix: `merge_slashes on;
+location ~ /\.\./ {
+  deny all;
+}`,
   },
   {
     id: "dotfiles",
     name: "Hidden File Exposure",
     severity: "high",
-    description: "Accesses hidden configuration files like .env, .git/config containing secrets.",
+    description: "Requests hidden files like .env and .git to expose secrets.",
     payload: "/.env",
-    vulnerable: { status: 200, response: "DB_PASSWORD=supersecret123\nAPI_KEY=sk_live_abc...\nJWT_SECRET=...", headers: { "Server": "nginx/1.25.3" } },
-    hardened: { status: 403, response: "Forbidden — all dotfile access denied.", headers: { "Server": "nginx" } },
-    fix: `location ~ /\\. {\n  deny all;\n  access_log off;\n  log_not_found off;\n}`,
+    fix: `location ~ /\.(env|git) {
+  deny all;
+  access_log off;
+  log_not_found off;
+}`,
   },
   {
-    id: "clickjacking",
-    name: "Clickjacking",
+    id: "git-config",
+    name: "Git Config Exposure",
+    severity: "high",
+    description: "Requests .git/config to reveal repository details or credentials.",
+    payload: "/.git/config",
+    fix: `location ~ /\.git/ {
+  deny all;
+  access_log off;
+  log_not_found off;
+}`,
+  },
+  {
+    id: "backup-sql",
+    name: "Backup File Exposure",
+    severity: "high",
+    description: "Requests backup files that may contain database dumps or credentials.",
+    payload: "/backup.sql",
+    fix: `location ~* \.(zip|sql|bak)$ {
+  deny all;
+  access_log off;
+  log_not_found off;
+}`,
+  },
+  {
+    id: "backup-zip",
+    name: "Backup Zip Exposure",
+    severity: "high",
+    description: "Requests archived backups that may include sensitive data.",
+    payload: "/backup.zip",
+    fix: `location ~* \.(zip|sql|bak)$ {
+  deny all;
+  access_log off;
+  log_not_found off;
+}`,
+  },
+  {
+    id: "admin",
+    name: "Admin Path Probe",
     severity: "medium",
-    description: "Embeds your site in an invisible iframe to trick users into clicking hidden elements.",
-    payload: '<iframe src="https://target.com/transfer"></iframe>',
-    vulnerable: { status: 200, response: "Site loads normally inside attacker's iframe.", headers: { "Server": "nginx/1.25.3" } },
-    hardened: { status: 200, response: "Browser refuses to render page inside iframe.", headers: { "X-Frame-Options": "DENY", "Content-Security-Policy": "frame-ancestors 'none'" } },
-    fix: `add_header X-Frame-Options "DENY" always;\nadd_header Content-Security-Policy "frame-ancestors 'none';" always;`,
+    description: "Probes for administrative or hidden management endpoints.",
+    payload: "/admin",
+    fix: `location /admin {
+  allow 127.0.0.1;
+  deny all;
+}`,
   },
   {
     id: "ratelimit",
-    name: "Rate Limiting / DDoS",
+    name: "Rate Limit Probe",
     severity: "medium",
-    description: "Floods the server with requests to exhaust resources and cause denial of service.",
-    payload: "for i in {1..1000}; do curl target; done",
-    vulnerable: { status: 200, response: "All 1000 requests served. Server resources exhausted.", headers: { "Server": "nginx/1.25.3" } },
-    hardened: { status: 429, response: "Too Many Requests — rate limit exceeded after burst threshold.", headers: { "Retry-After": "30", "Server": "nginx" } },
-    fix: `limit_req_zone $binary_remote_addr zone=api:10m rate=10r/s;\n\nlocation /api/ {\n  limit_req zone=api burst=20 nodelay;\n}`,
+    description: "Sends repeated requests to check whether rate limiting is enforced.",
+    payload: "POST /login (50 requests)",
+    fix: `limit_req_zone $binary_remote_addr zone=api:10m rate=10r/s;
+
+location /login {
+  limit_req zone=api burst=20 nodelay;
+}`,
   },
 ];
 
 const requirementConfig = `server {
-    listen 443 ssl http2;
-    server_name example.com;
+  listen 443 ssl http2;
+  server_name example.com;
 
-    # ✅ Mandatory TLS 1.3 only
-    ssl_protocols TLSv1.3;
-    ssl_certificate     /etc/nginx/ssl/fullchain.pem;
-    ssl_certificate_key /etc/nginx/ssl/privkey.pem;
-    ssl_session_tickets off;
+  ssl_protocols TLSv1.3;
+  ssl_certificate /etc/nginx/ssl/fullchain.pem;
+  ssl_certificate_key /etc/nginx/ssl/privkey.pem;
+  ssl_session_tickets off;
+  server_tokens off;
 
-    # ✅ Hide server version
-    server_tokens off;
+  add_header Strict-Transport-Security "max-age=63072000; includeSubDomains; preload" always;
+  add_header Content-Security-Policy "default-src 'self'; script-src 'self'; frame-ancestors 'none';" always;
+  add_header X-Frame-Options "DENY" always;
+  add_header X-Content-Type-Options "nosniff" always;
+  add_header Referrer-Policy "strict-origin" always;
+  add_header Permissions-Policy "geolocation=(), microphone=()" always;
 
-    # ✅ HSTS — strict transport security
-    add_header Strict-Transport-Security "max-age=63072000; includeSubDomains; preload" always;
-
-    # ✅ CSP — content security policy
-    add_header Content-Security-Policy "default-src 'self'; script-src 'self'; frame-ancestors 'none';" always;
-
-    # ✅ X-Frame-Options — clickjacking protection
-    add_header X-Frame-Options "DENY" always;
-
-    # Reverse proxy to backend
-    location / {
-        proxy_pass         http://127.0.0.1:3000;
-        proxy_http_version 1.1;
-        proxy_set_header   Host              $host;
-        proxy_set_header   X-Real-IP         $remote_addr;
-        proxy_set_header   X-Forwarded-For   $proxy_add_x_forwarded_for;
-        proxy_set_header   X-Forwarded-Proto $scheme;
-    }
+  location / {
+    proxy_pass http://frontend-app:3000;
+    proxy_http_version 1.1;
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+  }
 }
 
-# Redirect HTTP → HTTPS
 server {
-    listen 80;
-    server_name example.com;
-    return 301 https://$server_name$request_uri;
+  listen 80;
+  server_name example.com;
+  return 301 https://$server_name$request_uri;
 }`;
 
 const requirements = [
-  { label: "Nginx as Reverse Proxy", met: true, detail: "proxy_pass with X-Forwarded headers set" },
-  { label: "Mandatory TLS 1.3", met: true, detail: "ssl_protocols TLSv1.3 — no legacy fallback" },
-  { label: "HSTS Header", met: true, detail: "max-age=63072000 includeSubDomains preload" },
-  { label: "Content-Security-Policy", met: true, detail: "default-src 'self'; frame-ancestors 'none'" },
-  { label: "X-Frame-Options", met: true, detail: "DENY — blocks all iframe embedding" },
-  { label: "HTTP → HTTPS Redirect", met: true, detail: "301 redirect on port 80" },
-  { label: "Server Version Hidden", met: true, detail: "server_tokens off" },
+  { label: "Reverse Proxy", met: true, detail: "proxy_pass with forwarded client headers" },
+  { label: "TLS 1.3 Only", met: true, detail: "ssl_protocols TLSv1.3 and no legacy TLS" },
+  { label: "HSTS", met: true, detail: "Strict-Transport-Security with preload" },
+  { label: "CSP", met: true, detail: "Content-Security-Policy blocks unsafe sources" },
+  { label: "X-Frame-Options", met: true, detail: "DENY prevents clickjacking" },
+  { label: "Secure Redirect", met: true, detail: "HTTP port 80 redirects to HTTPS" },
+  { label: "Server Tokens Off", met: true, detail: "server_tokens off hides version info" },
 ];
 
 function RequirementCard() {
@@ -160,7 +196,6 @@ function RequirementCard() {
             className="overflow-hidden"
           >
             <div className="border-t border-primary/20 grid grid-cols-1 md:grid-cols-2 divide-y md:divide-y-0 md:divide-x divide-primary/20">
-              {/* Checklist */}
               <div className="p-5">
                 <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-4">Requirement Checklist</h4>
                 <div className="space-y-2.5">
@@ -177,13 +212,15 @@ function RequirementCard() {
                   ))}
                 </div>
               </div>
-
-              {/* Config */}
               <div className="p-5">
                 <div className="flex items-center justify-between mb-3">
                   <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Nginx Config</h4>
                   <button
-                    onClick={() => { navigator.clipboard.writeText(requirementConfig); setCopied(true); setTimeout(() => setCopied(false), 2000); }}
+                    onClick={() => {
+                      navigator.clipboard.writeText(requirementConfig);
+                      setCopied(true);
+                      setTimeout(() => setCopied(false), 2000);
+                    }}
                     className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
                   >
                     {copied ? <Check className="w-3 h-3 text-primary" /> : <Copy className="w-3 h-3" />}
@@ -212,16 +249,36 @@ function AttackCard({ attack }) {
   const [expanded, setExpanded] = useState(false);
   const [running, setRunning] = useState(false);
   const [result, setResult] = useState(null);
+  const [error, setError] = useState(null);
   const [copied, setCopied] = useState("");
 
-  const runAttack = () => {
+  const runAttack = async () => {
     setRunning(true);
+    setError(null);
     setResult(null);
-    setTimeout(() => {
-      setResult({ vulnerable: attack.vulnerable, hardened: attack.hardened });
+    setExpanded(true);
+
+    try {
+      const response = await fetch("/api/lab/run-comparison", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ testId: attack.id }),
+      });
+
+      const body = await response.json();
+      if (!response.ok || !body.ok) {
+        throw new Error(body.error || "Lab API request failed.");
+      }
+
+      setResult({
+        attackProxy: body.attackProxy || body.attackHttp,
+        safeProxy: body.safeProxy || body.tls13Proxy,
+      });
+    } catch (err) {
+      setError(err?.message || "Unknown error");
+    } finally {
       setRunning(false);
-      setExpanded(true);
-    }, 800 + Math.random() * 600);
+    }
   };
 
   const copyText = (text, key) => {
@@ -229,6 +286,36 @@ function AttackCard({ attack }) {
     setCopied(key);
     setTimeout(() => setCopied(""), 2000);
   };
+
+  const renderResultColumn = (label, data, highlight) => (
+    <div className="p-5">
+      <div className="flex items-center gap-2 mb-3">
+        {highlight ? <X className="w-4 h-4 text-destructive" /> : <Check className="w-4 h-4 text-primary" />}
+        <span className={`text-xs font-semibold uppercase tracking-wider ${highlight ? "text-destructive" : "text-primary"}`}>
+          {label}
+        </span>
+        <Badge variant="outline" className={`text-[10px] ml-auto ${highlight ? "border-destructive/30 text-destructive" : "border-primary/30 text-primary"}`}>
+          {data?.status || "--"}
+        </Badge>
+      </div>
+      <div className="font-mono text-[11px] p-3 rounded-lg bg-secondary/50 border border-border text-foreground/80 mb-3 whitespace-pre-wrap max-h-52 overflow-y-auto">
+        {data?.bodyPreview || "No response captured."}
+      </div>
+      <div className="space-y-1 text-[11px] text-muted-foreground">
+        <div className="flex gap-2">
+          <span className="font-semibold">Target:</span>
+          <span className="font-mono">{data?.target || "--"}</span>
+        </div>
+        <div className="flex gap-2">
+          <span className="font-semibold">Command:</span>
+          <span className="font-mono break-all">{data?.command || "--"}</span>
+        </div>
+        {data?.error && (
+          <div className="text-destructive">Error: {data.error}</div>
+        )}
+      </div>
+    </div>
+  );
 
   return (
     <motion.div
@@ -265,6 +352,7 @@ function AttackCard({ attack }) {
         <div className="font-mono text-xs px-3 py-2 rounded-lg bg-secondary/50 border border-border text-muted-foreground overflow-x-auto">
           {attack.payload}
         </div>
+        {error && <p className="text-sm text-destructive mt-3">{error}</p>}
       </div>
 
       <AnimatePresence>
@@ -276,52 +364,10 @@ function AttackCard({ attack }) {
             className="border-t border-border overflow-hidden"
           >
             <div className="grid grid-cols-1 md:grid-cols-2 divide-y md:divide-y-0 md:divide-x divide-border">
-              {/* Vulnerable */}
-              <div className="p-5">
-                <div className="flex items-center gap-2 mb-3">
-                  <X className="w-4 h-4 text-destructive" />
-                  <span className="text-xs font-semibold uppercase tracking-wider text-destructive">Vulnerable</span>
-                  <Badge variant="outline" className="text-[10px] ml-auto border-destructive/30 text-destructive">
-                    HTTP {result.vulnerable.status}
-                  </Badge>
-                </div>
-                <div className="font-mono text-xs p-3 rounded-lg bg-destructive/5 border border-destructive/10 text-destructive/80 mb-3 whitespace-pre-wrap">
-                  {result.vulnerable.response}
-                </div>
-                <div className="space-y-1">
-                  {Object.entries(result.vulnerable.headers).map(([k, v]) => (
-                    <div key={k} className="flex items-center gap-2 text-xs">
-                      <span className="text-muted-foreground">{k}:</span>
-                      <span className="font-mono text-destructive/70">{v}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              {/* Hardened */}
-              <div className="p-5">
-                <div className="flex items-center gap-2 mb-3">
-                  <Check className="w-4 h-4 text-primary" />
-                  <span className="text-xs font-semibold uppercase tracking-wider text-primary">Hardened</span>
-                  <Badge variant="outline" className="text-[10px] ml-auto border-primary/30 text-primary">
-                    HTTP {result.hardened.status}
-                  </Badge>
-                </div>
-                <div className="font-mono text-xs p-3 rounded-lg bg-primary/5 border border-primary/10 text-primary/80 mb-3 whitespace-pre-wrap">
-                  {result.hardened.response}
-                </div>
-                <div className="space-y-1">
-                  {Object.entries(result.hardened.headers).map(([k, v]) => (
-                    <div key={k} className="flex items-center gap-2 text-xs">
-                      <span className="text-muted-foreground">{k}:</span>
-                      <span className="font-mono text-primary/70">{v}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
+              {renderResultColumn("Attack Proxy", result.attackProxy, true)}
+              {renderResultColumn("Safe Proxy", result.safeProxy, false)}
             </div>
 
-            {/* Fix */}
             <div className="p-5 border-t border-border bg-secondary/10">
               <div className="flex items-center justify-between mb-2">
                 <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Nginx Fix</span>
@@ -355,8 +401,6 @@ function AttackCard({ attack }) {
 }
 
 export default function AttackSimulator() {
-  const [allRunning, setAllRunning] = useState(false);
-
   return (
     <div className="min-h-screen p-6 lg:p-10">
       <div className="max-w-4xl mx-auto">
@@ -369,12 +413,11 @@ export default function AttackSimulator() {
               <h1 className="text-2xl md:text-3xl font-bold">Attack Simulator</h1>
             </div>
             <p className="text-muted-foreground text-sm ml-[52px]">
-              Fire lab probes and compare attack proxy vs safe proxy responses side by side.
+              Fire real lab probes to compare the attack proxy with your TLS 1.3 secure proxy.
             </p>
           </div>
         </div>
 
-        {/* Requirement Check: Secure Proxy */}
         <RequirementCard />
 
         <div className="space-y-4">

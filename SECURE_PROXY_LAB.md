@@ -21,7 +21,7 @@ User / Attacker
     |-- http://localhost:8081
     |       |
     |       v
-    |   Attack Nginx Proxy
+    |   Attack Nginx Proxy (nginx-attack)
     |       |
     |       v
     |   Internal Frontend App
@@ -34,7 +34,7 @@ User / Attacker
     |-- https://localhost:8443
             |
             v
-        Safe Nginx Proxy
+        Safe Nginx Proxy (nginx-safe)
             |
             v
         Internal Frontend App
@@ -50,7 +50,7 @@ In this lab, users do not directly access the frontend app container. They acces
 
 ## Attack Proxy
 
-The attack proxy runs at:
+Attack proxy (`nginx-attack`) runs at:
 
 ```text
 http://localhost:8081
@@ -71,7 +71,7 @@ This proxy is useful because suspicious requests are allowed through and can be 
 
 ## Safe Proxy
 
-The safe proxy runs at:
+Safe proxy (`nginx-safe`) runs at:
 
 ```text
 https://localhost:8443
@@ -109,7 +109,7 @@ Blocked paths include:
 
 TLS protects traffic between the browser and the safe proxy.
 
-The safe Nginx config uses:
+The TLS 1.3 Nginx config uses:
 
 ```nginx
 ssl_protocols TLSv1.3;
@@ -216,7 +216,7 @@ This sends harmless demo requests to both proxies. It includes paths like:
 /search?q=UNION SELECT username,password FROM users
 /search?q=<script>alert(1)</script>
 /../../etc/passwd
-POST /login
+50 POST /login requests
 ```
 
 ## Historical Log Analysis

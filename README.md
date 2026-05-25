@@ -21,19 +21,19 @@ http://localhost:5175
 docker compose up --build
 ```
 
-Attack proxy:
+Attack proxy (`nginx-attack`):
 
 ```text
 http://localhost:8081
 ```
 
-Safe proxy:
+Safe proxy (`nginx-safe`):
 
 ```text
 https://localhost:8443
 ```
 
-Safe HTTP redirect:
+Secure HTTP redirect:
 
 ```text
 http://localhost:8082
@@ -63,10 +63,22 @@ Generate demo traffic:
 scripts/generate-lab-traffic.sh
 ```
 
+Windows PowerShell:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts/generate-lab-traffic.ps1
+```
+
 Analyze logs:
 
 ```bash
 scripts/analyze-nginx-logs.sh logs/attack/access.log logs/attack/error.log
+```
+
+Windows PowerShell:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts/analyze-nginx-logs.ps1 logs/attack/access.log logs/attack/error.log
 ```
 
 Monitor logs live:
@@ -75,7 +87,11 @@ Monitor logs live:
 scripts/monitor-nginx-logs.sh logs/attack/access.log
 ```
 
-On Windows, run the shell scripts from Git Bash or WSL.
+Windows PowerShell:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts/monitor-nginx-logs.ps1 logs/attack/access.log
+```
 
 ## Logs
 

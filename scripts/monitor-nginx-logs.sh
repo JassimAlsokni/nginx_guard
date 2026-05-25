@@ -16,7 +16,7 @@ fi
 mkdir -p "$(dirname "$ALERTS_LOG")"
 touch "$ACCESS_LOG" "$ALERTS_LOG"
 
-PATTERN='(\.env|\.git|\.sql|\.bak|\.zip|backup|config|union[[:space:]]+select|select.+from|<script>|javascript:|\.\./|\.\.%2f|/admin|POST /login)'
+PATTERN='(\.env|\.git|\.sql|\.bak|\.zip|backup|config|union[[:space:]]+select|select.+from|<script>|%3cscript%3e|javascript:|\.\./|\.\.%2f|/etc/passwd|/admin|POST /login)'
 
 sql_escape() {
   printf "%s" "$1" | sed "s/'/''/g"
@@ -28,9 +28,9 @@ alert_type_for_line() {
     echo "Sensitive File Access"
   elif echo "$line" | grep -E -qi '(union[[:space:]]+select|select.+from|or[[:space:]]+1=1|information_schema)'; then
     echo "SQL Injection Pattern"
-  elif echo "$line" | grep -E -qi '(<script>|javascript:|onerror=|onload=)'; then
+  elif echo "$line" | grep -E -qi '(<script>|%3cscript%3e|javascript:|onerror=|onload=)'; then
     echo "XSS Pattern"
-  elif echo "$line" | grep -E -qi '(\.\./|\.\.%2f|%2e%2e)'; then
+  elif echo "$line" | grep -E -qi '(\.\./|\.\.%2f|%2e%2e|/etc/passwd)'; then
     echo "Directory Traversal"
   elif echo "$line" | grep -E -qi 'POST /login'; then
     echo "Login Attempt"

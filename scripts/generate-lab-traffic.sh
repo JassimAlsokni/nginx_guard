@@ -14,7 +14,7 @@ request() {
 
 echo "Generating harmless Secure Proxy Lab traffic"
 echo "Attack proxy: $ATTACK_URL"
-echo "Safe proxy:   $SAFE_URL"
+echo "Safe proxy: $SAFE_URL"
 
 request "Attack proxy: GET /" \
   curl -sS -o /dev/null -w "HTTP %{http_code}\n" "$ATTACK_URL/"
@@ -39,12 +39,12 @@ request "Attack proxy: XSS-looking search" \
   curl -sS -o /dev/null -w "HTTP %{http_code}\n" \
     "$ATTACK_URL/search?q=%3Cscript%3Ealert(1)%3C/script%3E"
 
-request "Attack proxy: directory traversal-looking path" \
-  curl -sS -o /dev/null -w "HTTP %{http_code}\n" "$ATTACK_URL/../../etc/passwd"
+request "Attack proxy: exposed demo passwd file" \
+  curl -sS -o /dev/null -w "HTTP %{http_code}\n" "$ATTACK_URL/etc/passwd"
 
 echo
 echo "==> Attack proxy: repeated POST /login"
-for i in $(seq 1 12); do
+for i in $(seq 1 50); do
   curl -sS -o /dev/null -w "login attempt $i: HTTP %{http_code}\n" \
     -X POST "$ATTACK_URL/login" || true
 done
@@ -72,8 +72,15 @@ request "Safe proxy: XSS-looking search still reaches app as normal traffic" \
   curl -k -sS -o /dev/null -w "HTTP %{http_code}\n" \
     "$SAFE_URL/search?q=%3Cscript%3Ealert(1)%3C/script%3E"
 
-request "Safe proxy: directory traversal-looking path" \
-  curl -k -sS -o /dev/null -w "HTTP %{http_code}\n" "$SAFE_URL/../../etc/passwd"
+request "Safe proxy: demo passwd file should be blocked" \
+  curl -k -sS -o /dev/null -w "HTTP %{http_code}\n" "$SAFE_URL/etc/passwd"
+
+echo
+echo "==> Safe proxy: repeated POST /login"
+for i in $(seq 1 50); do
+  curl -k -sS -o /dev/null -w "safe login attempt $i: HTTP %{http_code}\n" \
+    -X POST "$SAFE_URL/login" || true
+done
 
 echo
 echo "Done. Logs should now be available under logs/attack and logs/safe."

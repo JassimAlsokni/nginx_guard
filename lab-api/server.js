@@ -13,15 +13,15 @@ const targets = {
   attack: {
     label: "Attack Proxy",
     protocol: "http:",
-    hostname: process.env.ATTACK_PROXY_HOST || "localhost",
-    port: Number(process.env.ATTACK_PROXY_PORT || 8081),
+    hostname: process.env.ATTACK_PROXY_HOST || "nginx-attack",
+    port: Number(process.env.ATTACK_PROXY_PORT || 80),
     baseUrl: "http://localhost:8081",
   },
   safe: {
     label: "Safe Proxy",
     protocol: "https:",
-    hostname: process.env.SAFE_PROXY_HOST || "localhost",
-    port: Number(process.env.SAFE_PROXY_PORT || 8443),
+    hostname: process.env.TLS13_PROXY_HOST || process.env.SAFE_PROXY_HOST || "nginx-safe",
+    port: Number(process.env.TLS13_PROXY_PORT || process.env.SAFE_PROXY_PORT || 443),
     baseUrl: "https://localhost:8443",
   },
 };
@@ -29,52 +29,127 @@ const targets = {
 const targetAliases = {
   attack: "attack",
   vulnerable: "attack",
+  "attack-http": "attack",
+  "nginx-attack": "attack",
   safe: "safe",
   secure: "safe",
   hardened: "safe",
+  tls13: "safe",
+  "tls13-proxy": "safe",
+  "nginx-safe": "safe",
 };
 
 const tests = {
   sqli: {
     path: "/search?q=UNION%20SELECT%20username,password%20FROM%20users",
     command: {
-      attack: "curl -s 'http://localhost:8081/search?q=UNION%20SELECT%20username,password%20FROM%20users'",
-      safe: "curl -k -s 'https://localhost:8443/search?q=UNION%20SELECT%20username,password%20FROM%20users'",
+      attack: "curl -i http://localhost:8081/search?q=UNION%20SELECT%20username,password%20FROM%20users",
+      safe: "curl -k -i https://localhost:8443/search?q=UNION%20SELECT%20username,password%20FROM%20users",
     },
   },
   xss: {
     path: "/search?q=%3Cscript%3Ealert(1)%3C/script%3E",
     command: {
-      attack: "curl -s 'http://localhost:8081/search?q=<script>alert(1)</script>'",
-      safe: "curl -k -s 'https://localhost:8443/search?q=<script>alert(1)</script>'",
+      attack: "curl -i http://localhost:8081/search?q=%3Cscript%3Ealert(1)%3C/script%3E",
+      safe: "curl -k -i https://localhost:8443/search?q=%3Cscript%3Ealert(1)%3C/script%3E",
     },
   },
   "path-traversal": {
-    path: "/search?q=..%2f..%2fetc%2fpasswd",
+    path: "/etc/passwd",
     command: {
-      attack: "curl -s 'http://localhost:8081/search?q=..%2f..%2fetc%2fpasswd'",
-      safe: "curl -k -s 'https://localhost:8443/search?q=..%2f..%2fetc%2fpasswd'",
+      attack: "curl -i http://localhost:8081/etc/passwd",
+      safe: "curl -k -i https://localhost:8443/etc/passwd",
     },
   },
   dotfiles: {
     path: "/.env",
     command: {
-      attack: "curl -s http://localhost:8081/.env",
-      safe: "curl -k -s https://localhost:8443/.env",
+      attack: "curl -i http://localhost:8081/.env",
+      safe: "curl -k -i https://localhost:8443/.env",
     },
   },
-  clickjacking: {
-    path: "/",
+  "git-config": {
+    path: "/.git/config",
     command: {
-      attack: "curl -s -D - http://localhost:8081 -o /dev/null | grep -i frame",
-      safe: "curl -k -s -D - https://localhost:8443 -o /dev/null | grep -i frame",
+      attack: "curl -i http://localhost:8081/.git/config",
+      safe: "curl -k -i https://localhost:8443/.git/config",
+    },
+  },
+  "backup-sql": {
+    path: "/backup.sql",
+    command: {
+      attack: "curl -i http://localhost:8081/backup.sql",
+      safe: "curl -k -i https://localhost:8443/backup.sql",
+    },
+  },
+  "backup-zip": {
+    path: "/backup.zip",
+    command: {
+      attack: "curl -i http://localhost:8081/backup.zip",
+      safe: "curl -k -i https://localhost:8443/backup.zip",
+    },
+  },
+  admin: {
+    path: "/admin",
+    command: {
+      attack: "curl -i http://localhost:8081/admin",
+      safe: "curl -k -i https://localhost:8443/admin",
     },
   },
   headers: {
     path: "/",
     command: {
-      attack: "curl -s -D - http://localhost:8081 -o /dev/null",
-      safe: "curl -k -s -D - https://localhost:8443 -o /dev/null",
+      attack: "curl -i http://localhost:8081/",
+      safe: "curl -k -i https://localhost:8443/",
+    },
+  },
+  "csp-header": {
+    path: "/",
+    command: {
+      attack: "curl -I http://localhost:8081",
+      safe: "curl -kI https://localhost:8443",
+    },
+  },
+  "xframe-header": {
+    path: "/",
+    command: {
+      attack: "curl -I http://localhost:8081",
+      safe: "curl -kI https://localhost:8443",
+    },
+  },
+  "hsts-header": {
+    path: "/",
+    command: {
+      attack: "curl -I http://localhost:8081",
+      safe: "curl -kI https://localhost:8443",
+    },
+  },
+  "xcontent-header": {
+    path: "/",
+    command: {
+      attack: "curl -I http://localhost:8081",
+      safe: "curl -kI https://localhost:8443",
+    },
+  },
+  "referrer-header": {
+    path: "/",
+    command: {
+      attack: "curl -I http://localhost:8081",
+      safe: "curl -kI https://localhost:8443",
+    },
+  },
+  "permissions-header": {
+    path: "/",
+    command: {
+      attack: "curl -I http://localhost:8081",
+      safe: "curl -kI https://localhost:8443",
+    },
+  },
+  clickjacking: {
+    path: "/",
+    command: {
+      attack: "curl -I http://localhost:8081",
+      safe: "curl -kI https://localhost:8443",
     },
   },
 };
@@ -112,7 +187,7 @@ const detectors = [
   { type: "Sensitive File Access", severity: "High", pattern: /(\/.env(?:[/?#]|$)|\/.git(?:[/?#]|$)|\.sql(?:[/?#]|$)|\.bak(?:[/?#]|$)|\.zip(?:[/?#]|$)|\/backup[/?#]|\/config[/?#])/i },
   { type: "SQL Injection Pattern", severity: "High", pattern: /\bunion\s+select\b|\bselect\s+.{0,50}?\s+from\b|\bor\s+1\s*=\s*1|information_schema/i },
   { type: "XSS Pattern", severity: "Medium", pattern: /(<script>|javascript:|onerror=|onload=)/i },
-  { type: "Directory Traversal", severity: "High", pattern: /(\.\.\/|\.\.%2f|%2e%2e)/i },
+  { type: "Directory Traversal", severity: "High", pattern: /(\.\.\/|\.\.%2f|%2e%2e|\/etc\/passwd)/i },
   { type: "Admin Path Probe", severity: "Medium", pattern: /\/admin/i },
   { type: "Login Attempt", severity: "Low", pattern: /"POST \/login/i },
 ];
@@ -303,7 +378,22 @@ function previewBody(body) {
 
   const isHtml = /<!doctype html|<html[\s>]/i.test(text);
   if (isHtml) {
-    return text.length > 3500 ? `${text.slice(0, 3500)}\n<!-- body truncated -->\n</body>\n</html>` : text;
+    const title = text.match(/<title[^>]*>([\s\S]*?)<\/title>/i)?.[1]?.trim();
+    const plainText = text
+      .replace(/<script[\s\S]*?<\/script>/gi, " ")
+      .replace(/<style[\s\S]*?<\/style>/gi, " ")
+      .replace(/<[^>]+>/g, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+
+    const lines = ["HTML response body received. Showing text only."];
+    if (title) {
+      lines.push(`Title: ${title}`);
+    }
+    if (plainText) {
+      lines.push(`Body text: ${plainText.length > 700 ? `${plainText.slice(0, 700)}... body text truncated ...` : plainText}`);
+    }
+    return lines.join("\n");
   }
 
   return text.length > 1200 ? `${text.slice(0, 1200)}\n... body truncated ...` : text;
@@ -320,8 +410,23 @@ function summarizeHttp(testId, targetName, result) {
     if (testId === "headers") {
       return `PASS: ${headerAudit.filter((header) => headers[header]).length}/6 required security headers are present.`;
     }
-    if (testId === "clickjacking") {
+    if (testId === "clickjacking" || testId === "xframe-header") {
       return headers["x-frame-options"] ? "PASS: X-Frame-Options is present." : "WARN: X-Frame-Options is missing.";
+    }
+    if (testId === "csp-header") {
+      return headers["content-security-policy"] ? "PASS: Content-Security-Policy is present." : "WARN: Content-Security-Policy is missing.";
+    }
+    if (testId === "hsts-header") {
+      return headers["strict-transport-security"] ? "PASS: Strict-Transport-Security is present." : "WARN: Strict-Transport-Security is missing.";
+    }
+    if (testId === "xcontent-header") {
+      return headers["x-content-type-options"] ? "PASS: X-Content-Type-Options is present." : "WARN: X-Content-Type-Options is missing.";
+    }
+    if (testId === "referrer-header") {
+      return headers["referrer-policy"] ? "PASS: Referrer-Policy is present." : "WARN: Referrer-Policy is missing.";
+    }
+    if (testId === "permissions-header") {
+      return headers["permissions-policy"] ? "PASS: Permissions-Policy is present." : "WARN: Permissions-Policy is missing.";
     }
   }
 
@@ -357,11 +462,35 @@ function formatHttpOutput(testId, targetName, result) {
     }
   }
 
-  if (testId === "headers") {
-    lines.push("", "Header audit:");
-    for (const header of headerAudit) {
-      lines.push(`- ${header}: ${result.headers?.[header] ? "present" : "missing"}`);
+    if (testId === "headers") {
+      lines.push("", "Header audit:");
+      for (const header of headerAudit) {
+        lines.push(`- ${header}: ${result.headers?.[header] ? "present" : "missing"}`);
+      }
     }
+
+  if (testId === "csp-header") {
+    lines.push("", `Content-Security-Policy: ${result.headers?.["content-security-policy"] ? "present" : "missing"}`);
+  }
+
+  if (testId === "xframe-header") {
+    lines.push("", `X-Frame-Options: ${result.headers?.["x-frame-options"] ? "present" : "missing"}`);
+  }
+
+  if (testId === "hsts-header") {
+    lines.push("", `Strict-Transport-Security: ${result.headers?.["strict-transport-security"] ? "present" : "missing"}`);
+  }
+
+  if (testId === "xcontent-header") {
+    lines.push("", `X-Content-Type-Options: ${result.headers?.["x-content-type-options"] ? "present" : "missing"}`);
+  }
+
+  if (testId === "referrer-header") {
+    lines.push("", `Referrer-Policy: ${result.headers?.["referrer-policy"] ? "present" : "missing"}`);
+  }
+
+  if (testId === "permissions-header") {
+    lines.push("", `Permissions-Policy: ${result.headers?.["permissions-policy"] ? "present" : "missing"}`);
   }
 
   lines.push("", previewBody(result.body), "", summarizeHttp(testId, targetName, result));
@@ -383,20 +512,39 @@ async function runHttpTest(testId, targetName) {
   };
 }
 
+async function probeTarget(testId, targetName) {
+  const test = tests[testId];
+  const target = targets[targetName];
+  const result = await requestTarget(target, test.path);
+
+  return {
+    target: target.baseUrl,
+    testId,
+    status: result.statusCode || 0,
+    statusText: result.statusMessage || result.error || "Unknown",
+    headers: result.headers || {},
+    bodyPreview: previewBody(result.body),
+    command: test.command[targetName],
+    error: result.error,
+    durationMs: result.durationMs,
+  };
+}
+
 async function runRateLimitTest(targetName) {
   const target = targets[targetName];
+  const attemptCount = 50;
   const command =
     targetName === "safe"
-      ? 'for i in {1..12}; do curl -k -s -o /dev/null -w "req $i: %{http_code}\\n" -X POST https://localhost:8443/login; done'
-      : 'for i in {1..12}; do curl -s -o /dev/null -w "req $i: %{http_code}\\n" -X POST http://localhost:8081/login; done';
+      ? 'for i in {1..50}; do curl -k -s -o /dev/null -w "req $i: %{http_code}\\n" -X POST https://localhost:8443/login; done'
+      : 'for i in {1..50}; do curl -s -o /dev/null -w "req $i: %{http_code}\\n" -X POST http://localhost:8081/login; done';
 
   const results = [];
-  for (let i = 1; i <= 12; i++) {
+  for (let i = 1; i <= attemptCount; i++) {
     const result = await requestTarget(target, "/login", { method: "POST" });
     results.push({ index: i, result });
   }
 
-  const lines = [`Target: ${target.baseUrl}/login`, "Real POST /login requests: 12", ""];
+  const lines = [`Target: ${target.baseUrl}/login`, `Real POST /login requests: ${attemptCount}`, ""];
   for (const item of results) {
     lines.push(`req ${item.index}: ${item.result.error ? item.result.code || "ERR" : item.result.statusCode}`);
   }
@@ -417,10 +565,10 @@ async function runTlsTest(targetName) {
     };
   }
 
-  const safeTarget = targets.safe;
+  const tlsTarget = targets.safe;
   const tls13 = await tlsProbe({
-    hostname: safeTarget.hostname,
-    port: safeTarget.port,
+    hostname: tlsTarget.hostname,
+    port: tlsTarget.port,
     minVersion: "TLSv1.3",
     maxVersion: "TLSv1.3",
   });
@@ -429,30 +577,135 @@ async function runTlsTest(targetName) {
   if (tls13.code === "ECONNREFUSED") {
     return {
       command,
-      output: withCommand(command, connectionErrorOutput(targets.safe, tls13)),
+      output: withCommand(command, connectionErrorOutput(tlsTarget, tls13)),
     };
   }
 
   const tls12 = await tlsProbe({
-    hostname: safeTarget.hostname,
-    port: safeTarget.port,
+    hostname: tlsTarget.hostname,
+    port: tlsTarget.port,
     minVersion: "TLSv1.2",
     maxVersion: "TLSv1.2",
   });
 
   return {
     command,
-    output: withCommand(command, [
-      "TLS 1.3 probe: localhost:8443",
+    output: withCommand(
+      command,
+      [
+        "TLS 1.3 probe: localhost:8443",
+        tls13.ok
+          ? `PASS: connected with protocol=${tls13.protocol} cipher=${tls13.cipher} duration=${tls13.durationMs}ms`
+          : `ERROR: TLS 1.3 failed: ${tls13.code || "ERR"} ${tls13.error}`,
+        "",
+        "TLS 1.2 rejection probe: localhost:8443",
+        tls12.ok
+          ? `WARN: TLS 1.2 was accepted with protocol=${tls12.protocol}`
+          : `PASS: TLS 1.2 was rejected: ${tls12.code || "ERR"} ${tls12.error}`,
+      ].join("\n")
+    ),
+  };
+}
+
+async function runTls13OnlyTest() {
+  const tlsTarget = targets.safe;
+  const tls13 = await tlsProbe({
+    hostname: tlsTarget.hostname,
+    port: tlsTarget.port,
+    minVersion: "TLSv1.3",
+    maxVersion: "TLSv1.3",
+  });
+  const command = "openssl s_client -connect localhost:8443 -tls1_3";
+
+  return {
+    command,
+    output: withCommand(
+      command,
       tls13.ok
-        ? `PASS: connected with protocol=${tls13.protocol} cipher=${tls13.cipher} duration=${tls13.durationMs}ms`
-        : `ERROR: TLS 1.3 failed: ${tls13.code || "ERR"} ${tls13.error}`,
-      "",
-      "TLS 1.2 rejection probe: localhost:8443",
+        ? `PASS: HTTPS accepted TLS 1.3.\nProtocol: ${tls13.protocol}\nCipher: ${tls13.cipher}\nTarget: https://localhost:8443`
+        : `ERROR: TLS 1.3 failed: ${tls13.code || "ERR"} ${tls13.error}`
+    ),
+  };
+}
+
+async function runTls12RejectTest() {
+  const tlsTarget = targets.safe;
+  const tls12 = await tlsProbe({
+    hostname: tlsTarget.hostname,
+    port: tlsTarget.port,
+    minVersion: "TLSv1.2",
+    maxVersion: "TLSv1.2",
+  });
+  const command = "openssl s_client -connect localhost:8443 -tls1_2";
+
+  return {
+    command,
+    output: withCommand(
+      command,
       tls12.ok
-        ? `WARN: TLS 1.2 was accepted with protocol=${tls12.protocol}`
-        : `PASS: TLS 1.2 was rejected: ${tls12.code || "ERR"} ${tls12.error}`,
-    ].join("\n")),
+        ? `WARN: TLS 1.2 was accepted.\nProtocol: ${tls12.protocol}\nThis should be rejected for TLS 1.3 only.`
+        : `PASS: TLS 1.2 was rejected.\nReason: ${tls12.code || "ERR"} ${tls12.error}`
+    ),
+  };
+}
+
+async function runHttpsProofTest(targetName) {
+  if (targetName === "attack") {
+    const attackHttpsTarget = {
+      ...targets.attack,
+      label: "Attack Proxy HTTPS probe",
+      protocol: "https:",
+      baseUrl: "https://localhost:8081",
+    };
+    const result = await requestTarget(attackHttpsTarget, "/");
+    const command = "curl -kI https://localhost:8081";
+
+    return {
+      command,
+      output: withCommand(
+        command,
+        result.error
+          ? `PASS: Attack proxy does not speak HTTPS on port 8081.\nReason: ${result.code || "ERR"} ${result.error}`
+          : `WARN: Attack proxy answered HTTPS with status ${result.statusCode}.`
+      ),
+    };
+  }
+
+  const result = await requestTarget(targets.safe, "/");
+  const command = "curl -kI https://localhost:8443";
+  return {
+    command,
+    output: withCommand(command, formatHttpOutput("https-proof", "safe", result)),
+  };
+}
+
+async function runRedirectProofTest() {
+  const redirectTarget = {
+    ...targets.attack,
+    label: "Safe HTTP Redirect",
+    hostname: targets.safe.hostname,
+    port: Number(process.env.SAFE_HTTP_PORT || 80),
+    baseUrl: "http://localhost:8082",
+  };
+  const result = await requestTarget(redirectTarget, "/");
+  const command = "curl -I http://localhost:8082";
+  return {
+    command,
+    output: withCommand(command, formatHttpOutput("redirect-proof", "safe", result)),
+  };
+}
+
+async function runAttackHttpProofTest() {
+  const result = await requestTarget(targets.attack, "/");
+  const command = "curl -I http://localhost:8081";
+  return {
+    command,
+    output: withCommand(
+      command,
+      result.error
+        ? connectionErrorOutput(targets.attack, result)
+        : `HTTP/1.1 ${result.statusCode} ${result.statusMessage || ""}\nTarget: http://localhost:8081\nPASS: Attack proxy is reachable with plaintext HTTP.`
+    ),
   };
 }
 
@@ -460,7 +713,7 @@ async function runTest(testId, rawTargetName) {
   const targetName = targetAliases[rawTargetName];
 
   if (!targetName) {
-    throw new Error("Unknown target. Allowed values: attack, safe.");
+    throw new Error("Unknown target. Allowed values: attack, vulnerable, safe, secure, hardened.");
   }
 
   if (testId === "ratelimit") {
@@ -469,6 +722,35 @@ async function runTest(testId, rawTargetName) {
 
   if (testId === "tls") {
     return runTlsTest(targetName);
+  }
+
+  if (testId === "tls13-only") {
+    if (targetName === "attack") {
+      return runAttackHttpProofTest();
+    }
+    return runTls13OnlyTest();
+  }
+
+  if (testId === "tls12-rejected") {
+    if (targetName === "attack") {
+      return runHttpsProofTest("attack");
+    }
+    return runTls12RejectTest();
+  }
+
+  if (testId === "https-proof") {
+    return runHttpsProofTest(targetName);
+  }
+
+  if (testId === "redirect-proof") {
+    if (targetName === "attack") {
+      return runAttackHttpProofTest();
+    }
+    return runRedirectProofTest();
+  }
+
+  if (testId === "attack-http-proof") {
+    return targetName === "attack" ? runAttackHttpProofTest() : runHttpsProofTest("safe");
   }
 
   if (!tests[testId]) {
@@ -590,6 +872,30 @@ async function route(req, res) {
       target: targetAliases[String(body.target || "")],
       command: result.command,
       output: result.output,
+      executedAt: new Date().toISOString(),
+    });
+    return;
+  }
+
+  if (req.method === "POST" && url.pathname === "/api/lab/run-comparison") {
+    const body = await readJson(req);
+    const testId = String(body.testId || "");
+
+    if (!tests[testId]) {
+      sendJson(res, 400, { ok: false, error: "Unknown test id." });
+      return;
+    }
+
+    const attackResult = await probeTarget(testId, "attack");
+    const safeResult = await probeTarget(testId, "safe");
+
+    sendJson(res, 200, {
+      ok: true,
+      testId,
+      attackProxy: attackResult,
+      safeProxy: safeResult,
+      attackHttp: attackResult,
+      tls13Proxy: safeResult,
       executedAt: new Date().toISOString(),
     });
     return;

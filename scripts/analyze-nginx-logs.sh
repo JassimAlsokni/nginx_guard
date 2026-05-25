@@ -36,8 +36,8 @@ print_matches() {
 
 SENSITIVE='(\.env|\.git|\.sql|\.bak|\.zip|backup|config)'
 SQLI='(union[[:space:]]+select|select.+from|or[[:space:]]+1=1|information_schema)'
-XSS='(<script>|javascript:|onerror=|onload=)'
-TRAVERSAL='(\.\./|\.\.%2f|%2e%2e)'
+XSS='(<script>|%3cscript%3e|javascript:|onerror=|onload=)'
+TRAVERSAL='(\.\./|\.\.%2f|%2e%2e|/etc/passwd)'
 ERRORS='(segfault|worker process exited|upstream timed out|connect\(\) failed|no live upstreams)'
 
 echo "Nginx Security Log Analysis"
@@ -50,7 +50,18 @@ section "A. Sensitive File Access"
 print_matches "$SENSITIVE" "$ACCESS_LOG"
 
 section "B. Suspicious Successful Sensitive Requests"
-if ! awk -v pattern="$SENSITIVE" 'BEGIN { IGNORECASE=1 } $0 ~ pattern && ($0 ~ /" 200 / || $0 ~ /" 302 /) { print }' "$ACCESS_LOG"; then
+if ! awk '
+  BEGIN { IGNORECASE=1 }
+  {
+    request = ""
+    if (match($0, /"[^"]+"/)) {
+      request = substr($0, RSTART, RLENGTH)
+    }
+    if (request ~ /(\.env|\.git|\.sql|\.bak|\.zip|backup|config)/ && ($0 ~ /" 200 / || $0 ~ /" 302 /)) {
+      print
+    }
+  }
+' "$ACCESS_LOG"; then
   echo "No matches found."
 fi
 

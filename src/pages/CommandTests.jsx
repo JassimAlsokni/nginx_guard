@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Check, Copy, Play, Terminal } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
@@ -24,9 +24,9 @@ const attackTests = [
     id: "path-traversal",
     name: "Directory Traversal",
     severity: "critical",
-    curlCmd: `curl -k -s -o /dev/null -w "%{http_code}" \\\n  'https://localhost:8443/search?q=..%2f..%2fetc%2fpasswd'`,
-    attackCmd: `curl -s 'http://localhost:8081/search?q=..%2f..%2fetc%2fpasswd'`,
-    safeCmd: `curl -k -s 'https://localhost:8443/search?q=..%2f..%2fetc%2fpasswd'`,
+    curlCmd: `curl.exe -kI https://localhost:8443/etc/passwd`,
+    attackCmd: `curl.exe -I http://localhost:8081/etc/passwd`,
+    safeCmd: `curl.exe -kI https://localhost:8443/etc/passwd`,
   },
   {
     id: "dotfiles",
@@ -37,20 +37,124 @@ const attackTests = [
     safeCmd: `curl -k -s https://localhost:8443/.env`,
   },
   {
+    id: "git-config",
+    name: "Git Config Path",
+    severity: "high",
+    curlCmd: `curl.exe -kI https://localhost:8443/.git/config`,
+    attackCmd: `curl.exe -I http://localhost:8081/.git/config`,
+    safeCmd: `curl.exe -kI https://localhost:8443/.git/config`,
+  },
+  {
+    id: "backup-sql",
+    name: "SQL Backup File",
+    severity: "high",
+    curlCmd: `curl.exe -kI https://localhost:8443/backup.sql`,
+    attackCmd: `curl.exe -I http://localhost:8081/backup.sql`,
+    safeCmd: `curl.exe -kI https://localhost:8443/backup.sql`,
+  },
+  {
+    id: "backup-zip",
+    name: "ZIP Backup File",
+    severity: "high",
+    curlCmd: `curl.exe -kI https://localhost:8443/backup.zip`,
+    attackCmd: `curl.exe -I http://localhost:8081/backup.zip`,
+    safeCmd: `curl.exe -kI https://localhost:8443/backup.zip`,
+  },
+  {
+    id: "admin",
+    name: "Admin Path Probe",
+    severity: "medium",
+    curlCmd: `curl.exe -kI https://localhost:8443/admin`,
+    attackCmd: `curl.exe -I http://localhost:8081/admin`,
+    safeCmd: `curl.exe -kI https://localhost:8443/admin`,
+  },
+  {
     id: "clickjacking",
     name: "Clickjacking Headers",
     severity: "medium",
-    curlCmd: `curl -k -s -D - https://localhost:8443 -o /dev/null \\\n  | grep -i "x-frame-options\\|frame-ancestors"`,
-    attackCmd: `curl -s -D - http://localhost:8081 -o /dev/null | grep -i frame`,
-    safeCmd: `curl -k -s -D - https://localhost:8443 -o /dev/null | grep -i frame`,
+    curlCmd: `curl.exe -kI https://localhost:8443`,
+    attackCmd: `curl.exe -I http://localhost:8081`,
+    safeCmd: `curl.exe -kI https://localhost:8443`,
+  },
+  {
+    id: "https-proof",
+    name: "HTTPS Proof",
+    severity: "critical",
+    curlCmd: `curl.exe -kI https://localhost:8443`,
+    attackCmd: `curl.exe -kI https://localhost:8081`,
+    safeCmd: `curl.exe -kI https://localhost:8443`,
+  },
+  {
+    id: "redirect-proof",
+    name: "HTTP Redirect Proof",
+    severity: "high",
+    curlCmd: `curl.exe -I http://localhost:8082`,
+    attackCmd: `curl.exe -I http://localhost:8081`,
+    safeCmd: `curl.exe -I http://localhost:8082`,
+  },
+  {
+    id: "attack-http-proof",
+    name: "Attack HTTP Proof",
+    severity: "high",
+    curlCmd: `curl.exe -I http://localhost:8081`,
+    attackCmd: `curl.exe -I http://localhost:8081`,
+    safeCmd: `curl.exe -kI https://localhost:8443`,
+  },
+  {
+    id: "csp-header",
+    name: "CSP Header Proof",
+    severity: "high",
+    curlCmd: `curl.exe -kI https://localhost:8443`,
+    attackCmd: `curl.exe -I http://localhost:8081`,
+    safeCmd: `curl.exe -kI https://localhost:8443`,
+  },
+  {
+    id: "hsts-header",
+    name: "HSTS Header Proof",
+    severity: "high",
+    curlCmd: `curl.exe -kI https://localhost:8443`,
+    attackCmd: `curl.exe -I http://localhost:8081`,
+    safeCmd: `curl.exe -kI https://localhost:8443`,
+  },
+  {
+    id: "xframe-header",
+    name: "X-Frame-Options Proof",
+    severity: "medium",
+    curlCmd: `curl.exe -kI https://localhost:8443`,
+    attackCmd: `curl.exe -I http://localhost:8081`,
+    safeCmd: `curl.exe -kI https://localhost:8443`,
+  },
+  {
+    id: "xcontent-header",
+    name: "X-Content-Type-Options Proof",
+    severity: "medium",
+    curlCmd: `curl.exe -kI https://localhost:8443`,
+    attackCmd: `curl.exe -I http://localhost:8081`,
+    safeCmd: `curl.exe -kI https://localhost:8443`,
+  },
+  {
+    id: "referrer-header",
+    name: "Referrer-Policy Proof",
+    severity: "medium",
+    curlCmd: `curl.exe -kI https://localhost:8443`,
+    attackCmd: `curl.exe -I http://localhost:8081`,
+    safeCmd: `curl.exe -kI https://localhost:8443`,
+  },
+  {
+    id: "permissions-header",
+    name: "Permissions-Policy Proof",
+    severity: "medium",
+    curlCmd: `curl.exe -kI https://localhost:8443`,
+    attackCmd: `curl.exe -I http://localhost:8081`,
+    safeCmd: `curl.exe -kI https://localhost:8443`,
   },
   {
     id: "ratelimit",
     name: "Login Attempt Logging",
     severity: "medium",
-    curlCmd: `for i in {1..12}; do\n  curl -k -s -o /dev/null -w "req $i: %{http_code}\\n" \\\n    -X POST https://localhost:8443/login\ndone`,
-    attackCmd: `for i in {1..12}; do curl -s -o /dev/null -w "req $i: %{http_code}\\n" -X POST http://localhost:8081/login; done`,
-    safeCmd: `for i in {1..12}; do curl -k -s -o /dev/null -w "req $i: %{http_code}\\n" -X POST https://localhost:8443/login; done`,
+    curlCmd: `for i in {1..50}; do\n  curl -k -s -o /dev/null -w "req $i: %{http_code}\\n" \\\n    -X POST https://localhost:8443/login\ndone`,
+    attackCmd: `for i in {1..50}; do curl -s -o /dev/null -w "req $i: %{http_code}\\n" -X POST http://localhost:8081/login; done`,
+    safeCmd: `for i in {1..50}; do curl -k -s -o /dev/null -w "req $i: %{http_code}\\n" -X POST https://localhost:8443/login; done`,
   },
   {
     id: "tls",
@@ -59,6 +163,22 @@ const attackTests = [
     curlCmd: `openssl s_client -connect localhost:8443 -tls1_3`,
     attackCmd: `curl -I http://localhost:8081`,
     safeCmd: `openssl s_client -connect localhost:8443 -tls1_3`,
+  },
+  {
+    id: "tls13-only",
+    name: "TLS 1.3 Proof",
+    severity: "critical",
+    curlCmd: `openssl s_client -connect localhost:8443 -tls1_3`,
+    attackCmd: `curl.exe -I http://localhost:8081`,
+    safeCmd: `openssl s_client -connect localhost:8443 -tls1_3`,
+  },
+  {
+    id: "tls12-rejected",
+    name: "TLS 1.2 Rejection Proof",
+    severity: "critical",
+    curlCmd: `openssl s_client -connect localhost:8443 -tls1_2`,
+    attackCmd: `curl.exe -I http://localhost:8081`,
+    safeCmd: `openssl s_client -connect localhost:8443 -tls1_2`,
   },
   {
     id: "headers",
@@ -93,19 +213,6 @@ function copyToClipboard(text) {
   document.body.removeChild(textarea);
 }
 
-function extractHtml(output) {
-  const text = String(output || "");
-  const htmlStart = text.search(/<!doctype html|<html[\s>]/i);
-
-  if (htmlStart === -1) return "";
-
-  const fromStart = text.slice(htmlStart);
-  const htmlEnd = fromStart.search(/<\/html>/i);
-  if (htmlEnd === -1) return "";
-
-  return fromStart.slice(0, htmlEnd + "</html>".length);
-}
-
 function OutputLine({ text }) {
   const value = String(text ?? "");
   const isWarning = value.startsWith("WARN:") || value.startsWith("ERROR:");
@@ -129,24 +236,6 @@ function OutputLine({ text }) {
   );
 }
 
-function HtmlPreview({ html }) {
-  if (!html) return null;
-
-  return (
-    <div className="mt-3 rounded-lg border border-border bg-background overflow-hidden">
-      <div className="px-3 py-2 border-b border-border text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-        Rendered HTML Preview
-      </div>
-      <iframe
-        title="Rendered response preview"
-        sandbox=""
-        srcDoc={html}
-        className="w-full h-52 bg-white"
-      />
-    </div>
-  );
-}
-
 function TerminalOutput({ label, cmd, testId, target, isAttack }) {
   const [running, setRunning] = useState(false);
   const [shown, setShown] = useState(false);
@@ -154,8 +243,6 @@ function TerminalOutput({ label, cmd, testId, target, isAttack }) {
   const [displayedLines, setDisplayedLines] = useState([]);
   const [copied, setCopied] = useState(false);
   const intervalRef = useRef(null);
-
-  const htmlPreview = useMemo(() => extractHtml(output), [output]);
 
   useEffect(() => {
     return () => {
@@ -285,7 +372,6 @@ function TerminalOutput({ label, cmd, testId, target, isAttack }) {
             {running && <span className="inline-block w-2 h-3.5 bg-foreground/50 animate-pulse ml-0.5" />}
           </div>
         )}
-        {!running && shown && <HtmlPreview html={htmlPreview} />}
       </div>
     </div>
   );

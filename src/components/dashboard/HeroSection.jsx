@@ -44,7 +44,7 @@ export default function HeroSection() {
           transition={{ duration: 0.6, delay: 0.2 }}
           className="text-lg md:text-xl text-muted-foreground max-w-2xl mx-auto mb-10 leading-relaxed"
         >
-          Compare an insecure HTTP proxy with a safe TLS 1.3 proxy, then inspect the real Nginx logs inside the app.
+          Compare an insecure attack proxy with a safe proxy, then inspect the real Nginx logs inside the app.
         </motion.p>
 
         <motion.div
